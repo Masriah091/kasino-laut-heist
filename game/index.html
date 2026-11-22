@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kasino Laut — Heist di Kapal Pesiar</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #060a18;
+    font-family: "Segoe UI", system-ui, sans-serif; color: #eaf2ff; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; }
+  .panel { position: absolute; background: rgba(6, 12, 28, 0.82); border: 1px solid #d4af37;
+    border-radius: 10px; padding: 8px 12px; font-size: 14px; line-height: 1.5;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); }
+  #hud-topleft { top: 12px; left: 12px; min-width: 190px; }
+  #hud-topleft b { color: #ffd76a; }
+  #hud-alarm { top: 118px; left: 12px; width: 190px; }
+  #alarm-bar { height: 12px; background: #1b2f5e; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+  #alarm-fill { height: 100%; width: 0%; background: #ffd34d; transition: width 0.15s; }
+  #alarm-text { font-weight: bold; letter-spacing: 1px; }
+  #hud-guards { left: 12px; bottom: 12px; max-width: 640px; font-size: 13px; }
+  #hud-banner { top: 12px; left: 50%; transform: translateX(-50%); color: #ffd76a;
+    font-weight: bold; text-align: center; max-width: 560px; display: none; }
+  #hud-prompt { bottom: 64px; left: 50%; transform: translateX(-50%); color: #2bff88;
+    font-weight: bold; display: none; }
+  #hud-blend { bottom: 110px; left: 50%; transform: translateX(-50%); color: #19e3d6;
+    font-weight: bold; display: none; }
+  #minimap-wrap { position: absolute; top: 12px; right: 12px; }
+  #minimap { border: 1px solid #d4af37; border-radius: 8px; display: block;
+    background: rgba(6, 12, 28, 0.85); }
+  #minimap-label { text-align: center; font-size: 11px; color: #9fc4ff; margin-top: 2px;
+    letter-spacing: 2px; }
+  #btn-mute { position: absolute; bottom: 12px; right: 12px; background: rgba(6,12,28,0.85);
+    color: #eaf2ff; border: 1px solid #d4af37; border-radius: 8px; padding: 6px 10px;
+    cursor: pointer; font-size: 13px; }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: rgba(4, 8, 20, 0.72); padding: 20px; }
+  .screen h1 { font-size: 52px; margin: 0 0 4px; color: #ffd76a; letter-spacing: 4px;
+    text-shadow: 0 0 24px rgba(255, 215, 106, 0.5); }
+  .screen h2 { font-size: 20px; margin: 0 0 18px; color: #19e3d6; letter-spacing: 2px; font-weight: normal; }
+  .screen p { max-width: 620px; font-size: 15px; line-height: 1.65; margin: 6px 0; }
+  .screen .gold { color: #ffd76a; font-weight: bold; }
+  .screen button { margin-top: 20px; font-size: 18px; padding: 12px 34px; cursor: pointer;
+    background: #d4af37; color: #101828; border: none; border-radius: 10px; font-weight: bold;
+    letter-spacing: 1px; box-shadow: 0 4px 18px rgba(212, 175, 55, 0.45); }
+  .screen button:hover { background: #ffd76a; }
+  #win-grade { font-size: 64px; color: #2bff88; margin: 4px 0; font-weight: bold;
+    text-shadow: 0 0 30px rgba(43, 255, 136, 0.6); }
+  #win-stats, #lose-stats { font-size: 17px; color: #eaf2ff; }
+  .keys { font-size: 13px; color: #9fc4ff; margin-top: 14px; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.min.js" } }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="hud" style="display:none">
+  <div class="panel" id="hud-topleft">
+    <div><b id="hud-loot">◆ 0/3 Jackpot</b></div>
+    <div id="hud-time">00:00</div>
+    <div id="hud-decoy">◉ Chip pengalih: 3</div>
+  </div>
+  <div class="panel" id="hud-alarm">
+    <span id="alarm-text">AMAN</span> — Meter Alarm
+    <div id="alarm-bar"><div id="alarm-fill"></div></div>
+  </div>
+  <div class="panel" id="hud-guards"></div>
+  <div class="panel" id="hud-banner"></div>
+  <div class="panel" id="hud-prompt"></div>
+  <div class="panel" id="hud-blend">🎭 BERBAUR — deteksi melambat</div>
+  <div id="minimap-wrap">
+    <canvas id="minimap" width="220" height="150"></canvas>
+    <div id="minimap-label">PETA KASINO</div>
+  </div>
+</div>
+<button id="btn-mute">🔊 Suara: Hidup</button>
+
+<div class="screen" id="screen-title">
+  <h1>KASINO LAUT</h1>
+  <h2>HEIST DI KAPAL PESIAR</h2>
+  <p>Tengah malam di dek kasino <span class="gold">MV Aurora</span>. Tiga jackpot menunggu:
+  <span class="gold">Chip Emas</span>, <span class="gold">Jam Saku</span>, dan
+  <span class="gold">Kalung Berlian</span> — dijaga empat sekuriti, dua CCTV, dan satu drone patroli.</p>
+  <p><span class="gold">MISI:</span> curi ketiganya, lalu kabur lewat pintu <span class="gold">EXIT</span> di selatan.
+  Ketahuan 3 kali = tamat. Kapal terus oleng — dan kerumunan tamu adalah cover terbaikmu:
+  berbaurlah agar tidak dikenali.</p>
+  <p><span class="gold">CARA MAIN:</span> WASD / panah bergerak · <b>E</b> ambil loot ·
+  <b>Q</b> lempar chip pengalih (3x) · <b>M</b> mute · <b>R</b> ulang</p>
+  <button id="btn-start">▶ MULAI HEIST</button>
+  <p class="keys">Enter juga bisa memulai · Kalahkan alarm sebelum alarm mengalahkanmu</p>
+</div>
+
+<div class="screen" id="screen-win" style="display:none">
+  <h1>JACKPOT!</h1>
+  <h2>KAMU LOLOS DENGAN SEMUA JARAHAN</h2>
+  <div id="win-grade">GRADE S</div>
+  <p id="win-stats"></p>
+  <p>Kapal berlayar menjauh di bawah bulan — kasino baru sadar saat fajar.</p>
+  <button id="btn-again-win">↻ MAIN LAGI</button>
+</div>
+
+<div class="screen" id="screen-lose" style="display:none">
+  <h1 style="color:#ff6b5e">TERTANGKAP!</h1>
+  <h2 style="color:#ff8c8c">SEKURITI MENGEPUNG — HEIST GAGAL</h2>
+  <p id="lose-stats"></p>
+  <p>Kapten kapal menyita topimu. Coba lagi — baca arah cone sebelum bergerak.</p>
+  <button id="btn-again-lose">↻ COBA LAGI</button>
+</div>
+
+<p id="status" role="status" aria-live="polite"></p>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
